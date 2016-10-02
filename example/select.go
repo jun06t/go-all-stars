@@ -18,6 +18,7 @@ func main() {
 		case <-boom:
 			fmt.Println("BOOM!")
 			count++
+		default:
 		}
 		if count > 10 {
 			return

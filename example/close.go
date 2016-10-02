@@ -21,6 +21,7 @@ func hoge(done <-chan struct{}) {
 		case <-done:
 			fmt.Println("done called")
 			return // 必須 // HL
+		default:
 		}
 	}
 }

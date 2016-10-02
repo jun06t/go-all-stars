@@ -20,6 +20,7 @@ func hoge(done <-chan struct{}) {
 		select {
 		case <-done:
 			fmt.Println("done called")
+		default:
 		}
 	}
 }
