@@ -19,9 +19,9 @@ func main() {
 			fmt.Println("BOOM!")
 			count++
 		default:
-		}
-		if count > 10 {
-			return
+			if count > 10 {
+				return
+			}
 		}
 	}
 }
