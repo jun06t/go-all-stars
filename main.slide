@@ -1,0 +1,201 @@
+goroutine、channelの扱い方
+Goオールスターズ2
+2 Oct 2016
+Tags: golang, goroutine, channel
+
+辻　純平
+AWA株式会社
+tsuji_jumpei@awa.fm
+https://github.com/jun06t
+
+* About me
+*辻純平*
+
+- 2013/04　株式会社サイバーエージェント新卒入社
+- 2013/05　ブラウザゲーム「ペコロッジ」
+- 2013/09　ネイティブゲーム「ミリオンチェイン」
+- 2014/08　音楽配信サービス「AWA」
+
+主にサーバとインフラを担当
+
+* What's AWA?
+- 音楽配信アプリ
+- サーバサイドでGolang採用
+
+.image image/awa.jpg
+
+* goroutine、channelの扱い方について
+
+* 確かに簡単に並行処理ができるけど、簡単すぎて正しい使い方か分かっていない
+
+* 疑問点
+- closeしたchannelに対してどういった操作だとpanicになるか
+- closeしたらselect内のチャンネルは反応するのか
+- selectのcaseの実行順は？
+- buffer付きchannelをcloseするとどうなるか
+- writerのchannelを返り値で渡すコードが多いのはなぜか
+- closeの必要性って？してる人としてない人がいる
+- bufferって必要？なくてもreaderとwriterの関係がしっかりしてればブロックされないので大丈夫では？
+- channelのrangeはいつまで続くのか
+- 上流でエラーによって関数が終了した。下流のgoroutineを止める方法は？
+
+* Q. closeしたchannelに対してどういった操作だとpanicになるか
+
+* Q. closeしたchannelに対してどういった操作だとpanicになるか
+NG. closeしたchannelにwriteしたらpanic
+.play example/close_panic1.go /START OMIT/,/END OMIT/
+
+NG. ２回closeしたらpanic
+.play example/close_panic2.go /START OMIT/,/END OMIT/
+
+OK. closeしたchannelをreadするのはOK
+.play example/close_panic3.go /START OMIT/,/END OMIT/
+
+
+* Q. closeしたらselect内のチャンネルは反応するのか
+
+* A. 反応する
+.play example/close.go /START OMIT/,/END OMIT/
+
+* いくらでも受信できるので、returnなどで抜けないとずっとそのzero値を受け取り続ける
+.play example/close_loop.go /START OMIT/,/END OMIT/
+
+
+* Q. selectのcaseの実行順は？
+
+* A. 複数のcaseが実行可能であるときはランダムで選ばれる。ただしdefaultがあればdefaultが優先
+
+_If_one_or_more_of_the_communications_can_proceed,_a_single_one_that_can_proceed_is_chosen_via_a_uniform_pseudo-random_selection._Otherwise,_if_there_is_a_default_case,_that_case_is_chosen._If_there_is_no_default_case,_the_"select"_statement_blocks_until_at_least_one_of_the_communications_can_proceed._
+
+ref: [[https://golang.org/ref/spec#Select_statements][Select statements]]
+
+
+* Q. buffer付きchannelをcloseするとどうなるか
+
+* A. bufferに入った分が読み出される
+.play example/buffer.go /START OMIT/,/END OMIT/
+
+* つまり、チャンネルを閉じた後でもgoroutineは処理を続ける
+.play example/buffer2.go /START OMIT/,/END OMIT/
+
+* これはリソースリーク
+.image image/leak.jpg 500 600
+
+* なので無駄な処理をなくすために、明示的にdoneチャンネルなどを用いて処理を完了させる仕組みが必要。
+
+
+* Q. writerのchannelを返り値で渡すコードが多いのはなぜか
+
+* こんな感じのコードをOSSでよく見る
+.play example/writer.go /START OMIT/,/END OMIT/
+
+* A. closeしやすくするため
+これはwriterの処理が完了した時にこの中でcloseできるようにしている
+
+- closeしたchannelにwriteはpanic
+- ２回closeはpanic
+
+という問題があるが、writerと別のところでchannelを定義＆closeしてしまうとこれが起きやすくなる。
+なのでwriterのスコープでcloseした方が問題が少ない。
+
+* ex) queueとして扱う書き方
+.play example/queue.go /START OMIT/,/END OMIT/
+
+* 問題点
+これだとhoge関数内でエラーが起きた時、
+producerやconsumerの処理を止められない。
+
+無理にcloseした場合
+
+- readerの方は止まる
+- writerの方でwriteしてpanicになる可能性がある
+
+
+* Q. closeって必要？してる人としてない人がいる
+
+* A. リソースの無駄遣いを防げるので必要な箇所ではcloseすべき
+
+前述のコードでもしhoge関数内でエラーが起きた時、closeするようなロジックにしてあれば
+
+- 1. inがcloseされる
+- 2. readerのrangeから抜ける
+- 3. readerの処理が止まる
+
+と言った感じで不要なリソースを使わなくて済みます
+
+* NG. closeしないケース
+.play example/close_leak.go /START1 OMIT/,/END1 OMIT/
+* NG. closeしないケース
+.play example/close_leak.go /START2 OMIT/,/END2 OMIT/
+
+error処理で関数が完了したので大丈夫、と思う人が多いですが、 *goroutineは動き続けます*
+
+* これもリソースリーク
+.image image/leak.jpg 500 600
+
+* OK. error時にちゃんとclose
+.play example/close_leak_fix.go /START1 OMIT/,/END1 OMIT/
+
+* OK. error時にちゃんとclose
+.play example/close_leak_fix.go /START2 OMIT/,/END2 OMIT/
+
+
+* Q. bufferって必要？なくてもreaderとwriterの関係がしっかりしてればブロックされないので大丈夫では？
+
+* A. 複数のworkerがいる時は必要
+
+* NG. bufferがないケース
+.play example/worker.go /START1 OMIT/,/END1 OMIT/
+
+* NG. bufferがないケース
+.play example/worker.go /START2 OMIT/,/END2 OMIT/
+
+* ３つのworkerがいるのでerror occurredも３回出る？
+でません。
+
+これはerrcのbufferが無いため、hoge関数が終了した時点でerrc channelからデータを取り出すreaderがいなくなり、残りのconsumerがブロックされてしまったから
+
+残りのgoroutineは
+
+    errc <- fmt.Errorf("error")
+
+でブロックされ、gcで回収されることもない
+
+* これもリソースリーク
+.image image/leak.jpg 500 600
+
+* OK. bufferをつけたケース
+.play example/worker_fix.go /START OMIT/,/END OMIT/
+
+
+* Q. channelのrangeはいつまで続くのか
+
+* A. そのchannelがcloseされるまで
+
+* NG. closeしないケース
+.play example/range.go /START OMIT/,/END OMIT/
+
+* つまりこのcloseされないrangeはブロックされ続ける
+
+* これもリソースリーク
+.image image/leak.jpg 500 600
+
+* OK. closeするケース
+.play example/range_fix.go /START OMIT/,/END OMIT/
+
+
+* Q. 上流でエラーによって関数が終了した。下流のgoroutineを止める方法は？
+
+
+* まとめ
+
+* まとめ
+- 基本的にcloseはした方が良い
+- writerとそのchannelのcloseは同じ関数内で定義した方が良い
+- ただしcloseしてもbufferがあればリソースリークは起こる
+- channelのreadにrangeを使っている場合はcloseが必要
+- errorで関数を終了させる場合、下流で走っているgoroutineが適切に終了する仕組みを考える
+
+* その他
+- Go1.7ではgolang.org/x/net/contextがcontextパッケージとして標準パッケージに
+- 下流のgoroutineを停止させてくれる仕組みが簡単に導入できる
