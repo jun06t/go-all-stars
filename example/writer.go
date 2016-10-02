@@ -12,7 +12,7 @@ func main() {
 
 // START OMIT
 func hoge() {
-	in := writer(1, 2, 3, 4, 5)
+	in := writer(1, 2, 3, 4, 5) // HL
 
 	go reader(in)
 

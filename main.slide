@@ -8,6 +8,7 @@ AWA株式会社
 tsuji_jumpei@awa.fm
 https://github.com/jun06t
 
+
 * About me
 *辻純平*
 
@@ -18,11 +19,13 @@ https://github.com/jun06t
 
 主にサーバとインフラを担当
 
+
 * What's AWA?
 - 音楽配信アプリ
 - サーバサイドでGolang採用
 
 .image image/awa.jpg
+
 
 * goroutine、channelの扱い方について
 
@@ -30,14 +33,13 @@ https://github.com/jun06t
 
 * 疑問点
 - closeしたchannelに対してどういった操作だとpanicになるか
-- closeしたらselect内のチャンネルは反応するのか
+- closeしたらselect内のchannelは反応するのか
 - selectのcaseの実行順は？
 - buffer付きchannelをcloseするとどうなるか
 - writerのchannelを返り値で渡すコードが多いのはなぜか
 - closeの必要性って？してる人としてない人がいる
-- bufferって必要？なくてもreaderとwriterの関係がしっかりしてればブロックされないので大丈夫では？
 - channelのrangeはいつまで続くのか
-- 上流でエラーによって関数が終了した。下流のgoroutineを止める方法は？
+- bufferって必要？なくてもreaderとwriterの関係がしっかりしてればブロックされないので大丈夫では？
 
 * Q. closeしたchannelに対してどういった操作だとpanicになるか
 
@@ -63,12 +65,21 @@ OK. closeしたchannelをreadするのはOK
 
 * Q. selectのcaseの実行順は？
 
-* A. 複数のcaseが実行可能であるときはランダムで選ばれる。ただしdefaultがあればdefaultが優先
+* A. 複数のcaseが実行可能であるときはランダムで選ばれる
 
 _If_one_or_more_of_the_communications_can_proceed,_a_single_one_that_can_proceed_is_chosen_via_a_uniform_pseudo-random_selection._Otherwise,_if_there_is_a_default_case,_that_case_is_chosen._If_there_is_no_default_case,_the_"select"_statement_blocks_until_at_least_one_of_the_communications_can_proceed._
 
 ref: [[https://golang.org/ref/spec#Select_statements][Select statements]]
 
+* A. 複数のcaseが実行可能であるときはランダムで選ばれる
+.play example/select.go /START OMIT/,/END OMIT/
+
+[[https://play.golang.org/p/01C8TxEBoq][Go Playground]]
+
+* これはいわゆる終了用のdone channelでも同じことが起きる
+
+「doneで終了させてるのにいくつか処理が漏れてるみたい…」
+と感じたらこれが理由
 
 * Q. buffer付きchannelをcloseするとどうなるか
 
@@ -130,6 +141,8 @@ producerやconsumerの処理を止められない。
 
 error処理で関数が完了したので大丈夫、と思う人が多いですが、 *goroutineは動き続けます*
 
+なので上流の関数でエラー起きた時に下流のgoroutineをキャンセルする仕組みが必要
+
 * これもリソースリーク
 .image image/leak.jpg 500 600
 
@@ -138,6 +151,22 @@ error処理で関数が完了したので大丈夫、と思う人が多いです
 
 * OK. error時にちゃんとclose
 .play example/close_leak_fix.go /START2 OMIT/,/END2 OMIT/
+
+
+* Q. channelのrangeはいつまで続くのか
+
+* A. そのchannelがcloseされるまで
+
+* NG. closeしないケース
+.play example/range.go /START OMIT/,/END OMIT/
+
+* つまりこのcloseされないrangeはブロックされ続ける
+
+* これもリソースリーク
+.image image/leak.jpg 500 600
+
+* OK. closeするケース
+.play example/range_fix.go /START OMIT/,/END OMIT/
 
 
 * Q. bufferって必要？なくてもreaderとwriterの関係がしっかりしてればブロックされないので大丈夫では？
@@ -168,24 +197,6 @@ error処理で関数が完了したので大丈夫、と思う人が多いです
 .play example/worker_fix.go /START OMIT/,/END OMIT/
 
 
-* Q. channelのrangeはいつまで続くのか
-
-* A. そのchannelがcloseされるまで
-
-* NG. closeしないケース
-.play example/range.go /START OMIT/,/END OMIT/
-
-* つまりこのcloseされないrangeはブロックされ続ける
-
-* これもリソースリーク
-.image image/leak.jpg 500 600
-
-* OK. closeするケース
-.play example/range_fix.go /START OMIT/,/END OMIT/
-
-
-* Q. 上流でエラーによって関数が終了した。下流のgoroutineを止める方法は？
-
 
 * まとめ
 
@@ -195,6 +206,7 @@ error処理で関数が完了したので大丈夫、と思う人が多いです
 - ただしcloseしてもbufferがあればリソースリークは起こる
 - channelのreadにrangeを使っている場合はcloseが必要
 - errorで関数を終了させる場合、下流で走っているgoroutineが適切に終了する仕組みを考える
+
 
 * その他
 - Go1.7ではgolang.org/x/net/contextがcontextパッケージとして標準パッケージに
