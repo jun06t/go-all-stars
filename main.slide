@@ -11,6 +11,8 @@ https://github.com/jun06t
 
 * About me
 *辻純平*
+1987年生まれ
+O型
 
 - 2013/04　株式会社サイバーエージェント新卒入社
 - 2013/05　ブラウザゲーム「ペコロッジ」
@@ -29,7 +31,11 @@ https://github.com/jun06t
 
 * goroutine、channelの扱い方について
 
-* 確かに簡単に並行処理ができるけど、簡単すぎて正しい使い方か分かっていない
+* goroutineを使うと簡単に並行処理が書けますよね
+.image image/easy.jpg 400 500
+.caption 「ね、簡単でしょ」
+
+* でも簡単すぎて正しい使い方か分かっていないかも？
 
 * 疑問点
 - closeしたchannelに対してどういった操作だとpanicになるか
@@ -113,12 +119,12 @@ ref: [[https://golang.org/ref/spec#Select_statements][Select statements]]
 .play example/queue.go /START OMIT/,/END OMIT/
 
 * 問題点
-これだとhoge関数内でエラーが起きた時、
-producerやconsumerの処理を止められない。
+これだとhoge関数内でエラーが起きた時、別でgoroutineとして動いている
+writerやreaderの処理を止められない。
 
 無理にcloseした場合
 
-- readerの方は止まる
+- readerの方はちゃんと止まる
 - writerの方でwriteしてpanicになる可能性がある
 
 
@@ -200,12 +206,17 @@ error処理で関数が完了したので大丈夫、と思う人が多いです
 
 * まとめ
 
-* まとめ
+* 実装上のポイント
 - 基本的にcloseはした方が良い
 - writerとそのchannelのcloseは同じ関数内で定義した方が良い
-- ただしcloseしてもbufferがあればリソースリークは起こる
-- channelのreadにrangeを使っている場合はcloseが必要
+- closeしてもbufferがあればリソースリークが起こるケースがあるので注意
+- 逆にbufferがないとリソースリークが起こるケースもあるので注意
 - errorで関数を終了させる場合、下流で走っているgoroutineが適切に終了する仕組みを考える
+- race detectorが標準で備わっているため、積極的に利用しましょう
+
+一方で・・・
+
+- 可読性が下がるから避けることもある
 
 
 * その他

@@ -11,7 +11,7 @@ func main() {
 
 // START OMIT
 func hoge() {
-	in := make(chan int)
+	in := make(chan int, 5)
 	go writer(in)
 	go reader(in)
 
