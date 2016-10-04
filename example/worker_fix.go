@@ -42,7 +42,6 @@ func hoge() error {
 			return e
 		case <-done:
 			return nil
-		default:
 		}
 	}
 }

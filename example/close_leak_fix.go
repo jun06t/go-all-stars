@@ -37,7 +37,6 @@ func writer(done <-chan struct{}, nums ...int) <-chan int {
 			case <-done: // doneが来たら終了する // HL
 				return // HL
 			case in <- n:
-			default:
 			}
 		}
 	}()
